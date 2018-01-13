@@ -1,0 +1,226 @@
+#include <Wire.h> //підключення бібліотеки датчика тиску і температури
+#include <SPI.h>  //підключення бібліотеки датчика тиску і температури
+#include <Adafruit_Sensor.h>  //підключення бібліотеки датчика тиску і температури
+#include <Adafruit_BMP280.h>  //підключення бібліотеки датчика тиску і температури
+
+//настройка конекторів датчика температури і тиску
+#define BMP_SCK 13 //порт 13 scl
+#define BMP_MISO 12 //порт 12 sdo
+#define BMP_MOSI 11 //порт 11 sda
+#define BMP_CS 10 //порт 10 csb
+
+char coldTemp = 26; //мінімальна температура води в баці
+char hotTemp = 30; //максимальна температура води в баці
+int WorkPressure;
+
+//підключення лід лампи ардуінки
+byte led = 13; //лед на ардуіно ПІНУ присвоєний номер 13
+int sec = 300; //очікування пів секунди
+
+//підключення і настройка реле
+byte relayPin8 = 9; //відповідає за обігрів бачка і генератора при морозі
+byte relayPin7 = 8; //відповідає за кулер на бачку
+byte relayPin6 = 7; //відповідає за кулер на генераторі
+byte relayPin5 = 6; //відповідає за насос
+byte relayPin4 = 5; //перший відповідальний за мощу 5А
+byte relayPin3 = 4; //другий відповідальний за мощу 5А
+byte relayPin2 = 3; //третій відповідальний за мощу 5А
+byte relayPin1 = 2; //четвертий відповідальний за мощу 5А
+
+byte amortDelay = 5; //лічильник циклів
+byte curCycleCount = 0;
+
+bool tempCalibrationComplete = false; //ініціалізація температури завершено
+bool needsHeatUp = false; //потребувана до нагріття температури
+bool curHeatUp = false;
+bool needsCoolDown = false;
+bool heatEnabled = false; //процес відправки на пін про нагрів
+
+bool tempCalibrationComplete2 = false; //ініціалізація температури завершено
+bool needsColdUp = false; //потребувана до охолодження температури
+bool curColdUp = false;
+bool needsHotDown = false;
+bool coldEnabled = false; //процес відправки на пін про охолодження
+
+Adafruit_BMP280 bmp(BMP_CS, BMP_MOSI, BMP_MISO,  BMP_SCK);
+
+void setup() { //виконується при загрузці ардуіно
+  Serial.begin(9600); //відкривається послідовний порт для моніторингу по монітору
+  Serial.println(F("перевірка датчика температури і тиску")); //виведення тексту
+  pinMode(led, OUTPUT);  //переключає сам пін на вивід сигналу
+  pinMode(13, INPUT); //порт 13 scl ввід сигналу
+  pinMode(12, INPUT); //порт 12 sdo ввід сигналу
+  pinMode(11, INPUT); //порт 11 sda ввід сигналу
+  pinMode(10, INPUT); //порт 10 csb ввід сигналу
+ 
+  Serial.println(F("перевірка реле. всі мають включитись"));
+  pinMode(relayPin8, OUTPUT); //переключення пінів на виведення сигналу
+  pinMode(relayPin7, OUTPUT);
+  pinMode(relayPin6, OUTPUT);
+  pinMode(relayPin5, OUTPUT);
+  pinMode(relayPin4, OUTPUT);
+  pinMode(relayPin3, OUTPUT);
+  pinMode(relayPin2, OUTPUT);
+  pinMode(relayPin1, OUTPUT);
+  digitalWrite(relayPin8, LOW); //пакетно включає всі релюхи
+  digitalWrite(relayPin7, LOW);
+  digitalWrite(relayPin6, LOW);
+  digitalWrite(relayPin5, LOW);
+  digitalWrite(relayPin4, LOW);
+  digitalWrite(relayPin3, LOW);
+  digitalWrite(relayPin2, LOW);
+  digitalWrite(relayPin1, LOW);
+  digitalWrite(relayPin8, HIGH); //і виключає
+  digitalWrite(relayPin7, HIGH);
+  digitalWrite(relayPin6, HIGH);
+  digitalWrite(relayPin5, HIGH);
+  digitalWrite(relayPin4, HIGH);
+  digitalWrite(relayPin3, HIGH);
+  digitalWrite(relayPin2, HIGH);
+  digitalWrite(relayPin1, HIGH);
+  
+  if (!bmp.begin()) {  //перевіряє підключення датчика
+    Serial.println(F("нема датчика температури і тиску!!!"));
+    while (1);
+  }
+   
+  Serial.print(F("стартова температура = "));
+  Serial.print(bmp.readTemperature());
+  Serial.println(" *C");
+  Serial.print(F("стартовий тиск = "));
+  Serial.print(bmp.readPressure());
+  Serial.println(" Pa");
+  Serial.print(F("Висота над рівнем моря = "));
+  Serial.print(bmp.readAltitude(1013.25)); // this should be adjusted to your local forcase
+  Serial.println(" m");
+
+  curHeatUp = (bmp.readTemperature() < coldTemp);
+}
+
+void controlTempCold()
+{
+  {
+    float currentTempterature = bmp.readTemperature();
+//    Serial.println("-для підігріву: "); 
+    Serial.println(currentTempterature);
+    if (currentTempterature < coldTemp)
+    {
+      needsHeatUp = true; // кажем шо пора гриті
+    }
+    else 
+    {
+      needsHeatUp = false; // кажем шо гриті стане
+      tempCalibrationComplete = true; // завершуєм калибровку темп
+    }
+  }
+  if(needsHeatUp != curHeatUp)
+  {
+    if (curCycleCount < amortDelay)
+    {
+      needsHeatUp = curHeatUp;
+      curCycleCount ++;
+    }
+    else
+    {
+      amortDelay = 0;
+      curCycleCount = 0;
+    }
+  }
+  if (needsHeatUp)//дивимся чи  трбе гріти
+  {
+    if (!heatEnabled) //якщо ми не гріємо
+    {//то включаємо нагрів
+      heatEnabled = true;
+      digitalWrite(relayPin8, LOW);
+    }
+  }
+  else //якщо не треба гріти
+  {
+    if (heatEnabled) //дивимось чи гріємо
+    { //вирубаємо обігрів
+      heatEnabled = false;
+      digitalWrite(relayPin8, HIGH);
+    }
+  }
+}
+
+void controlTempHot()
+{
+  {
+    float currentTempterature = bmp.readTemperature();
+//    Serial.println("+для охолодження:");
+    Serial.println(currentTempterature);
+    if (currentTempterature > hotTemp)
+    {
+      needsColdUp = true; // кажем шо пора охолодити
+    }
+    else 
+    {
+      needsColdUp = false; // кажем шо охолодженню стане
+      tempCalibrationComplete2 = true; // завершуєм калибровку темп
+    }
+  }
+  if(needsColdUp != curHeatUp2)
+  {
+    if (curCycleCount < amortDelay)
+    {
+      needsHeatUp = curHeatUp;
+      curCycleCount ++;
+    }
+    else
+    {
+      amortDelay = 0;
+      curCycleCount = 0;
+    }
+  }
+  if (needsHeatUp2)//дивимся чи  трбе охолодити
+  {
+    if (!heatEnabled2) //якщо ми не охолоджуємо
+    {//то включаємо кулера
+      coldEnabled = true;
+      digitalWrite(relayPin7, LOW);
+      digitalWrite(relayPin6, LOW);
+    }
+  }
+  else //якщо не треба гріти
+  {
+    if (heatEnabled2) //дивимось чи охолоджуємо
+    { //вирубаємо охолодження
+      coldEnabled = false;
+      digitalWrite(relayPin7, HIGH);
+      digitalWrite(relayPin6, HIGH);
+    }
+  }
+}
+void loop() 
+{ //постійно виконувані функції
+  controlTempCold();
+  controlTempHot();
+
+//  Serial.print(F("температура = "));
+//  Serial.print(bmp.readTemperature());
+//    Serial.println(" *C");
+//    Serial.print(F("тиск = "));
+    Serial.print(bmp.readPressure());
+    Serial.println(" Pa");
+//    Serial.print(F("Висота над рівнем моря = "));
+//    Serial.print(bmp.readAltitude(1013.25)); // this should be adjusted to your local forcase
+//    Serial.println(" m");
+// ізвращяюсь над релюшкою   
+//  delay(sec);
+//  digitalWrite(relayPin1, LOW); //пакетно включає всі релюхи
+//  digitalWrite(relayPin2, LOW);
+//  digitalWrite(relayPin3, LOW);
+//  digitalWrite(relayPin4, LOW);
+  digitalWrite(relayPin5, LOW); //робота насосу безперебойна
+//
+//  digitalWrite(relayPin1, HIGH); //і виключає
+//  delay(sec);
+//  digitalWrite(relayPin2, HIGH);
+//  delay(sec);
+//  digitalWrite(relayPin3, HIGH);
+//  delay(sec);
+//  digitalWrite(relayPin4, HIGH);
+//  delay(sec);
+
+}
