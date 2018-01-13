@@ -160,7 +160,7 @@ void controlTempHot()
       tempCalibrationComplete2 = true; // завершуєм калибровку темп
     }
   }
-  if(needsColdUp != curHeatUp2)
+  if(needsColdUp != curColdUp)
   {
     if (curCycleCount < amortDelay)
     {
@@ -173,9 +173,9 @@ void controlTempHot()
       curCycleCount = 0;
     }
   }
-  if (needsHeatUp2)//дивимся чи  трбе охолодити
+  if (needsColdUp)//дивимся чи  трбе охолодити
   {
-    if (!heatEnabled2) //якщо ми не охолоджуємо
+    if (!coldEnabled) //якщо ми не охолоджуємо
     {//то включаємо кулера
       coldEnabled = true;
       digitalWrite(relayPin7, LOW);
@@ -184,7 +184,7 @@ void controlTempHot()
   }
   else //якщо не треба гріти
   {
-    if (heatEnabled2) //дивимось чи охолоджуємо
+    if (coldEnabled) //дивимось чи охолоджуємо
     { //вирубаємо охолодження
       coldEnabled = false;
       digitalWrite(relayPin7, HIGH);
