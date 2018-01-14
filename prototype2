@@ -27,7 +27,7 @@ byte relayPin3 = 4; //другий відповідальний за мощу 5�
 byte relayPin2 = 3; //третій відповідальний за мощу 5А
 byte relayPin1 = 2; //четвертий відповідальний за мощу 5А
 
-byte amortDelay = 5; //лічильник циклів
+byte amortDelay = 25; //лічильник циклів
 byte curCycleCount = 0;
 
 bool tempCalibrationComplete = false; //ініціалізація температури завершено
@@ -101,11 +101,11 @@ void controlTempCold()
 {
   {
     float currentTempterature = bmp.readTemperature();
-//    Serial.println("-для підігріву: "); 
+    Serial.print("-для підігріву: "); 
     Serial.println(currentTempterature);
     if (currentTempterature < coldTemp)
     {
-      needsHeatUp = true; // кажем шо пора гриті
+      needsHeatUp = true; // кажем шо пора гріти
     }
     else 
     {
@@ -148,7 +148,7 @@ void controlTempHot()
 {
   {
     float currentTempterature = bmp.readTemperature();
-//    Serial.println("+для охолодження:");
+    Serial.print("+для охолодження: ");
     Serial.println(currentTempterature);
     if (currentTempterature > hotTemp)
     {
